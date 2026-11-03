@@ -1,0 +1,37 @@
+#!/bin/bash
+# Install user-level tools onto the encrypted volume (once) and start T3.
+# Run after workspace-unlock; `cvm up` does both.
+#
+# Tools live under /root (bind-mounted from the encrypted disk), so they
+# survive stop/deploy and `t3 update` / `claude update` keep working.
+set -euo pipefail
+
+T3_PORT=${T3_PORT:-3774}
+export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
+
+mountpoint -q /root || { echo "workspace-bootstrap: /root is not on the volume; run workspace-unlock first" >&2; exit 1; }
+
+if ! command -v claude >/dev/null; then
+    echo "Installing Claude Code..."
+    curl -fsSL https://claude.ai/install.sh | bash
+fi
+
+if ! command -v t3 >/dev/null; then
+    echo "Installing T3 Code..."
+    curl -fsSL https://t3.codes/install.sh | sh
+fi
+
+if ! command -v codex >/dev/null; then
+    echo "Installing Codex CLI..."
+    npm config set prefix "$HOME/.npm-global"
+    npm install -g @openai/codex >/dev/null || echo "codex install failed; skipping" >&2
+fi
+
+# T3 listens on loopback only. The laptop reaches it through `cvm tunnel`,
+# an SSH port-forward inside the attested Tinfoil tunnel.
+if tmux has-session -t t3 2>/dev/null; then
+    echo "T3 already running (tmux session 't3')."
+else
+    tmux new-session -d -s t3 "T3CODE_HOST=127.0.0.1 T3CODE_PORT=$T3_PORT t3 serve; exec bash"
+    echo "Started T3 on 127.0.0.1:$T3_PORT (tmux session 't3')."
+fi

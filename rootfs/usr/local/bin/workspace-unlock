@@ -1,0 +1,68 @@
+#!/usr/bin/python3
+"""Unlock (or first-time initialize) the encrypted workspace volume.
+
+Reads key material on stdin, so the key never touches the enclave's disk or
+argv. Then bind-mounts persistent paths (/root) from the volume.
+
+    cvm unlock     # from the laptop: pipes ~/.config/pathfinder-cvm/workspace.key
+"""
+import base64, hashlib, json, os, socket, subprocess, sys
+
+DISK = "/mnt/disk"
+CONTROL = "/run/tinfoil/volumes/workspace/control.sock"
+PERSIST = ["/root"]
+
+
+def send(packet):
+    with socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as s:
+        s.connect(CONTROL)
+        s.send(packet)
+        return s.recv(256)
+
+
+def ask_binary(op, key):
+    # Documented protocol: format byte 0x02 (Argon2id), op byte, raw key.
+    return send(b"\x02" + op + key)
+
+
+def ask_json(op, key):
+    # Older volume workers speak JSON.
+    reply = send(json.dumps({"op": op, "key": base64.b64encode(key).decode()}).encode())
+    return json.loads(reply)["status"].encode()
+
+
+def unlock(key):
+    status = ask_binary(b"i", key)
+    if status.startswith(b"{"):
+        status = ask_json("initialize", key)
+        if status == b"rejected":
+            status = ask_json("unlock", key)
+        return status
+    if status == b"rejected":  # not blank: it was initialized before
+        status = ask_binary(b"u", key)
+    return status
+
+
+def main():
+    if os.path.ismount("/root") and os.path.exists(DISK + "/root"):
+        print("Already unlocked.")
+        return
+    if os.path.exists(CONTROL):
+        material = sys.stdin.buffer.read()
+        if len(material) < 16:
+            sys.exit("workspace-unlock: expected key material on stdin")
+        status = unlock(hashlib.sha512(material).digest())
+        if status != b"ok":
+            sys.exit(f"workspace-unlock: volume worker answered {status!r}")
+        print("Volume unlocked.")
+    else:
+        sys.exit(f"workspace-unlock: {CONTROL} missing; is a disk attached?")
+    for path in PERSIST:
+        if not os.path.exists(DISK + path):
+            subprocess.run(["cp", "-a", "--parents", path, DISK], check=True)
+        if not os.path.ismount(path):
+            subprocess.run(["mount", "--bind", DISK + path, path], check=True)
+
+
+if __name__ == "__main__":
+    main()

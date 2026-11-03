@@ -1,0 +1,53 @@
+# Pathfinder confidential dev box: an Ubuntu workspace in a Tinfoil CPU enclave.
+#
+# This file is measured into the attestation, so it lives in a PUBLIC repo.
+# Never put secret values here. To change it: edit, merge to main, then
+# release a new tag (`cvm release vX.Y.Z`) and `cvm update vX.Y.Z`.
+cvm-version: 0.14.8
+
+# 4 vCPU / 16 GB ≈ $0.40/hr at Tinfoil list prices ($0.06/vCPU-hr, $0.01/GB-hr).
+cpus: 4
+memory: 16384
+
+networks:
+  dev:
+    # A dev box needs package registries, GitHub, model APIs, etc. Switch to
+    # `egress: allowlist` + `allow: [...]` to pin outbound hosts.
+    egress: open
+
+volumes:
+  # Encrypted persistent disk. Unlocked after each boot with a key that only
+  # lives on your laptop (see `cvm unlock`); Tinfoil never sees it.
+  - name: workspace
+    exec: true
+
+containers:
+  - name: "workspace"
+    image: "ghcr.io/lucid-computing/t3-enclave@sha256:0000000000000000000000000000000000000000000000000000000000000000" # rewritten at release
+    restart: on-failure
+    cvm_admin: true
+    stop_signal: SIGRTMIN+3
+    stop_timeout: 120
+    networks: [dev]
+    persistent_volumes: ["workspace:/mnt/disk"]
+    ports: ["22:22"]
+
+    env:
+      # Measured: the attestation commits to exactly who can log in.
+      # One public key per line. `cvm init` prints yours.
+      - SSH_KEYS: |-
+          ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL/9OSy8A5u/8psOtGd7MQkOhDvvAQKEmqAGfEji3NCS pathfinder-cvm calebparikh@CP-Lucid-MBP
+
+    tmpfs:
+      /run: "rw,nosuid,nodev,mode=755"
+
+    healthcheck:
+      test: ["CMD", "/healthcheck.sh"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+shim:
+  upstream-port: 22
+  authenticated: false
