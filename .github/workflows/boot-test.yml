@@ -1,0 +1,33 @@
+name: Diagnose published image boot
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: read
+jobs:
+  boot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Authenticate to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Pull published image and boot systemd
+        run: |
+          image=ghcr.io/lucid-computing/t3-enclave@sha256:34665421c5f4de029538ca43345f338365358c86934364a59e22de20c6846f1e
+          docker pull "$image"
+          ssh-keygen -q -t ed25519 -N '' -f /tmp/test-key
+          docker run -d --name boot-test --privileged --cgroupns=private             --tmpfs /run:rw,nosuid,nodev,mode=755 --tmpfs /run/lock             -e SSH_KEYS="$(cat /tmp/test-key.pub)" "$image"
+          for i in $(seq 1 30); do
+            if docker exec boot-test /healthcheck.sh; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - name: Boot diagnostics
+        if: always()
+        run: |
+          docker logs boot-test || true
+          docker exec boot-test systemctl status ssh.service --no-pager || true
+          docker exec boot-test journalctl -u ssh.service --no-pager -n 50 || true
+          docker exec boot-test systemctl --failed --no-pager || true
