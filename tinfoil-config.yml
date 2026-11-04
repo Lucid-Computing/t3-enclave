@@ -23,7 +23,7 @@ volumes:
 
 containers:
   - name: "workspace"
-    image: "ghcr.io/lucid-computing/t3-enclave@sha256:0000000000000000000000000000000000000000000000000000000000000000" # rewritten at release
+    image: "ghcr.io/lucid-computing/t3-enclave@sha256:ecd8c321114b7fdafbd78230145f7fb14670dd170cd6119a4b8b11c320446031" # v0.1.1
     restart: on-failure
     cvm_admin: true
     stop_signal: SIGRTMIN+3
