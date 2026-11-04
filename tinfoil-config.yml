@@ -3,7 +3,7 @@
 # This file is measured into the attestation, so it lives in a PUBLIC repo.
 # Never put secret values here. To change it: edit, merge to main, then
 # release a new tag (`cvm release vX.Y.Z`) and `cvm update vX.Y.Z`.
-cvm-version: 0.14.8
+cvm-version: 0.14.17
 
 # 4 vCPU / 16 GB ≈ $0.40/hr at Tinfoil list prices ($0.06/vCPU-hr, $0.01/GB-hr).
 cpus: 4
@@ -29,7 +29,7 @@ containers:
     stop_signal: SIGRTMIN+3
     stop_timeout: 120
     networks: [dev]
-    volumes: ["workspace:/mnt/disk"]
+    persistent_volumes: ["workspace:/mnt/disk"]
     ports: ["22:22"]
 
     env:
