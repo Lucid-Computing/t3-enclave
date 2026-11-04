@@ -30,6 +30,13 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Validate config against the pinned CVM schema
+        run: |
+          # CVM 0.14.17 embeds tinfoil-config v0.1.18. Keep these in sync.
+          grep -qx 'cvm-version: 0.14.17' tinfoil-config.yml
+          docker run --rm -v "$PWD:/src:ro" golang:1.25 \
+            go run github.com/tinfoilsh/tinfoil-config/cmd/tinfoil-config@v0.1.18 /src/tinfoil-config.yml
+
       - name: Check the version tag is new
         env:
           VERSION: ${{ inputs.version }}
