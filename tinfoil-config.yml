@@ -29,7 +29,7 @@ containers:
     stop_signal: SIGRTMIN+3
     stop_timeout: 120
     networks: [dev]
-    persistent_volumes: ["workspace:/mnt/disk"]
+    volumes: ["workspace:/mnt/disk"]
     ports: ["22:22"]
 
     env:
